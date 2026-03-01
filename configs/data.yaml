@@ -1,0 +1,39 @@
+data:
+  start_date: "2024-01-02"
+  end_date: "2025-05-31"
+  interval: "1d"
+  universe:
+    - "BRK.B"
+    - "JPM"
+    - "LLY"
+    - "JNJ"
+    - "XOM"
+    - "CVX"
+    - "AAPL"
+    - "NVDA"
+    - "AMZN"
+    - "META"
+    - "MSFT"
+    - "TSLA"
+    - "QQQ"
+    - "SPY"
+
+  # Optional: point this to your existing downloaded Yahoo cache.
+  price_source_cache_dir: "yahoo_data"
+
+  price_output_dir: "trading_r1/artifacts/raw/price"
+  news_output_dir: "trading_r1/artifacts/raw/news"
+  fundamentals_output_dir: "trading_r1/artifacts/raw/fundamentals"
+
+  # Optional: directory of SimFin CSV exports for point-in-time fundamentals.
+  simfin_csv_dir: null
+
+  # Needed for Finnhub news collection.
+  finnhub_api_key: null
+  include_google_news: true
+
+  samples_output_path: "trading_r1/artifacts/datasets/prompt_samples.jsonl"
+  labels_path: "trading_r1/artifacts/labels/labels.jsonl"
+
+  variants_per_day: 20
+  random_seed: 42

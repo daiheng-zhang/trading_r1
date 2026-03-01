@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-r1"
+version = "0.1.0"
+description = "Paper-faithful Trading-R1 research pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "PyYAML>=6.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+market = ["yfinance>=0.2.40"]
+train = [
+  "torch>=2.1",
+  "transformers>=4.45",
+  "datasets>=2.19",
+  "peft>=0.11",
+  "accelerate>=0.30",
+  "deepspeed>=0.14",
+  "trl>=0.9",
+]
+all = ["trading-r1[market,train]"]
+
+test = ["pytest>=8.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

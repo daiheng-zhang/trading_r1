@@ -1,0 +1,11 @@
+train_grpo:
+  mode: "trl"
+  stage: 2
+  train_path: "trading_r1/artifacts/datasets/grpo_batch.jsonl"
+  output_dir: "trading_r1/artifacts/models/stage2_grpo"
+  model_name_or_path: "trading_r1/artifacts/models/stage2_sft"
+
+  group_size: 8
+  clip_eps: 0.2
+  kl_beta: 0.03
+  invalid_decision_reward: -1.5

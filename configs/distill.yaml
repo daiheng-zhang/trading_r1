@@ -1,0 +1,13 @@
+distill:
+  samples_path: "trading_r1/artifacts/datasets/prompt_samples.jsonl"
+  sft_output_path: "trading_r1/artifacts/datasets/sft_targets.jsonl"
+  grpo_output_path: "trading_r1/artifacts/datasets/grpo_batch.jsonl"
+
+  frontend:
+    provider: "mock"   # mock | openai
+    model: "gpt-4.1-mini"
+    api_key: null
+    temperature: 0.2
+
+  planner:
+    max_steps: 6

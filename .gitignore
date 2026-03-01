@@ -1,0 +1,55 @@
+.vscode/
+.history/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+*.tmp
+*.log
+*.bak
+*.swp
+*.DS_Store
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+.python-version
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+
+# Packaging / build
+build/
+dist/
+eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+wheelhouse/
+
+# Testing / coverage / caches
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Misc
+*.sqlite3
+*.env
+celerybeat-schedule
+.webassets-cache

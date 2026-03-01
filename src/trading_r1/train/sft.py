@@ -1,0 +1,186 @@
+"""Stage-wise SFT training entrypoints."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from trading_r1.utils.io import read_jsonl
+
+
+@dataclass
+class SFTConfig:
+    mode: str
+    stage: int
+    train_path: str
+    val_path: str | None
+    output_dir: str
+    model_name: str
+    max_seq_len: int
+    num_train_epochs: int
+    learning_rate: float
+    batch_size: int
+    grad_accum: int
+    lora_r: int
+    lora_alpha: int
+    lora_dropout: float
+    lora_target_modules: list[str]
+    deepspeed_config: str | None = None
+
+
+def _run_mock_sft(cfg: SFTConfig) -> dict[str, Any]:
+    rows = read_jsonl(cfg.train_path)
+    out_dir = Path(cfg.output_dir)
+    ckpt = out_dir / "checkpoint-mock"
+    ckpt.mkdir(parents=True, exist_ok=True)
+
+    base = 1.2
+    losses = [round(base / (1 + i * 0.4), 6) for i in range(max(1, cfg.num_train_epochs))]
+    metrics = {
+        "mode": "mock",
+        "stage": cfg.stage,
+        "samples": len(rows),
+        "train_loss": losses,
+        "final_loss": losses[-1],
+    }
+    (ckpt / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    (ckpt / "model_card.json").write_text(
+        json.dumps(
+            {
+                "model": cfg.model_name,
+                "stage": cfg.stage,
+                "lora": {
+                    "r": cfg.lora_r,
+                    "alpha": cfg.lora_alpha,
+                    "dropout": cfg.lora_dropout,
+                    "targets": cfg.lora_target_modules,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return metrics
+
+
+def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy path
+    try:
+        import datasets  # type: ignore
+        import torch
+        from peft import LoraConfig, get_peft_model  # type: ignore
+        from transformers import (
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            DataCollatorForLanguageModeling,
+            Trainer,
+            TrainingArguments,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "SFT mode=hf requires transformers/datasets/peft/torch dependencies."
+        ) from exc
+
+    train_rows = read_jsonl(cfg.train_path)
+    if not train_rows:
+        raise RuntimeError(f"No training rows found: {cfg.train_path}")
+
+    def _fmt(row: dict[str, Any]) -> dict[str, str]:
+        return {
+            "text": f"<|user|>\n{row['input_text']}\n<|assistant|>\n{row['target_text']}"
+        }
+
+    train_ds = datasets.Dataset.from_list([_fmt(r) for r in train_rows])
+
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name, use_fast=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = AutoModelForCausalLM.from_pretrained(cfg.model_name, torch_dtype=torch.bfloat16)
+
+    lora_cfg = LoraConfig(
+        r=cfg.lora_r,
+        lora_alpha=cfg.lora_alpha,
+        lora_dropout=cfg.lora_dropout,
+        target_modules=cfg.lora_target_modules,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    model = get_peft_model(model, lora_cfg)
+    model.gradient_checkpointing_enable()
+
+    def _tokenize(batch: dict[str, list[str]]) -> dict[str, Any]:
+        return tokenizer(
+            batch["text"],
+            truncation=True,
+            max_length=cfg.max_seq_len,
+            padding=False,
+        )
+
+    tokenized = train_ds.map(_tokenize, batched=True, remove_columns=["text"])
+
+    args = TrainingArguments(
+        output_dir=cfg.output_dir,
+        num_train_epochs=cfg.num_train_epochs,
+        learning_rate=cfg.learning_rate,
+        per_device_train_batch_size=cfg.batch_size,
+        gradient_accumulation_steps=cfg.grad_accum,
+        bf16=True,
+        logging_steps=5,
+        save_strategy="epoch",
+        report_to=[],
+        deepspeed=cfg.deepspeed_config,
+    )
+
+    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    trainer = Trainer(
+        model=model,
+        args=args,
+        train_dataset=tokenized,
+        tokenizer=tokenizer,
+        data_collator=collator,
+    )
+    out = trainer.train()
+    trainer.save_model(cfg.output_dir)
+
+    metrics = {
+        "mode": "hf",
+        "stage": cfg.stage,
+        "samples": len(train_rows),
+        "train_loss": float(out.training_loss),
+    }
+    Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
+    Path(cfg.output_dir, "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    return metrics
+
+
+def train_sft(cfg: SFTConfig) -> dict[str, Any]:
+    if cfg.mode == "mock":
+        return _run_mock_sft(cfg)
+    if cfg.mode == "hf":
+        return _run_hf_sft(cfg)
+    raise ValueError(f"Unsupported SFT mode: {cfg.mode}")
+
+
+def train_sft_from_config(config: dict[str, Any]) -> dict[str, Any]:
+    c = config.get("train_sft", config)
+    cfg = SFTConfig(
+        mode=str(c.get("mode", "mock")),
+        stage=int(c.get("stage", 1)),
+        train_path=c["train_path"],
+        val_path=c.get("val_path"),
+        output_dir=c["output_dir"],
+        model_name=str(c.get("model_name", "Qwen/Qwen3-4B-Instruct")),
+        max_seq_len=int(c.get("max_seq_len", 32768)),
+        num_train_epochs=int(c.get("num_train_epochs", 1)),
+        learning_rate=float(c.get("learning_rate", 2e-5)),
+        batch_size=int(c.get("batch_size", 1)),
+        grad_accum=int(c.get("grad_accum", 8)),
+        lora_r=int(c.get("lora_r", 64)),
+        lora_alpha=int(c.get("lora_alpha", 128)),
+        lora_dropout=float(c.get("lora_dropout", 0.05)),
+        lora_target_modules=list(c.get("lora_target_modules", ["q", "k", "v", "o", "up", "down", "gate"])),
+        deepspeed_config=c.get("deepspeed_config"),
+    )
+    return train_sft(cfg)

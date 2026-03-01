@@ -1,0 +1,20 @@
+train_sft:
+  mode: "hf"
+  stage: 3
+  train_path: "trading_r1/artifacts/datasets/sft_targets.jsonl"
+  val_path: null
+  output_dir: "trading_r1/artifacts/models/stage3_sft"
+
+  model_name: "Qwen/Qwen3-4B-Instruct"
+  max_seq_len: 32768
+  num_train_epochs: 1
+  learning_rate: 1.0e-5
+  batch_size: 1
+  grad_accum: 8
+
+  lora_r: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  lora_target_modules: ["q", "k", "v", "o", "up", "down", "gate"]
+
+  deepspeed_config: null

@@ -1,0 +1,13 @@
+backtest:
+  infer_config_path: "trading_r1/configs/infer.yaml"
+  samples_path: "trading_r1/artifacts/datasets/prompt_samples.jsonl"
+  price_dir: "trading_r1/artifacts/raw/price"
+  output_dir: "trading_r1/artifacts/backtest/holdout"
+
+  # Fixed split policy from plan
+  start_date: "2024-06-03"
+  end_date: "2024-08-30"
+
+  transaction_cost_bps: 5.0
+  rf_annual: 0.04
+  periods_per_year: 252
