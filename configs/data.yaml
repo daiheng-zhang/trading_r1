@@ -29,7 +29,7 @@ data:
   simfin_csv_dir: null
 
   # Needed for Finnhub news collection.
-  finnhub_api_key: null
+  finnhub_api_key: d461gopr01qieo4se4v0d461gopr01qieo4se4vg
   include_google_news: true
 
   samples_output_path: "trading_r1/artifacts/datasets/prompt_samples.jsonl"
