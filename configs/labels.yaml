@@ -1,6 +1,6 @@
 labels:
-  price_dir: "trading_r1/artifacts/raw/price"
-  output_path: "trading_r1/artifacts/labels/labels.jsonl"
+  price_dir: "/scratch/10499/daiheng367/trading_r1/artifacts/raw/price"
+  output_path: "/scratch/10499/daiheng367/trading_r1/artifacts/labels/labels.jsonl"
 
   ema_span: 3
   horizons: [3, 7, 15]

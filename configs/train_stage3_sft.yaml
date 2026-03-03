@@ -1,9 +1,9 @@
 train_sft:
   mode: "hf"
   stage: 3
-  train_path: "trading_r1/artifacts/datasets/sft_targets.jsonl"
+  train_path: "scratch/10499/daiheng367/trading_r1/artifacts/datasets/sft_targets.jsonl"
   val_path: null
-  output_dir: "trading_r1/artifacts/models/stage3_sft"
+  output_dir: "scratch/10499/daiheng367/trading_r1/artifacts/models/stage3_sft"
 
   model_name: "Qwen/Qwen3-4B-Instruct"
   max_seq_len: 32768

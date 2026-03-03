@@ -1,5 +1,5 @@
 infer:
   mode: "mock"   # hf | mock
-  model_name_or_path: "trading_r1/artifacts/models/stage3_grpo"
-  samples_path: "trading_r1/artifacts/datasets/prompt_samples.jsonl"
+  model_name_or_path: "scratch/10499/daiheng367/trading_r1/artifacts/models/stage3_grpo"
+  samples_path: "scratch/10499/daiheng367/trading_r1/artifacts/datasets/prompt_samples.jsonl"
   max_new_tokens: 1024
