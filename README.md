@@ -42,33 +42,60 @@ Fixed policy from plan:
 - Training modules provide `mock` mode for local smoke tests.
 - Replace `mock` with real backends in configs for full multi-GPU runs.
 
+## Native HF Teacher (No Server)
+Use local Qwen directly for distillation (`provider: "hf"`), no OpenAI-compatible server needed.
+
+Install runtime dependencies in your conda env:
+```bash
+python -m pip install "transformers>=4.45" "torch>=2.1" "accelerate>=0.30" "bitsandbytes>=0.43"
+```
+
+`configs/distill.yaml` example:
+```yaml
+distill:
+  frontend:
+    provider: "hf"
+    model: "Qwen/Qwen3-4B-Instruct-2507"
+    api_key: null
+    temperature: 0.2
+    hf_device_map: "auto"
+    hf_load_in_4bit: true
+    hf_max_new_tokens: 16
+    hf_top_p: 0.9
+    hf_do_sample: false
+    hf_trust_remote_code: true
+```
+
+Run distillation:
+```bash
+python __main__.py distill-sft --config configs/distill.yaml
+```
 
 ## python command
 ```bash
 # 1) collect raw data
-python3 __main__.py collect-data --config configs/data.yaml
+python __main__.py collect-data --config configs/data.yaml
 
 # 2) generate labels
-python3 __main__.py make-labels --config configs/labels.yaml
+python __main__.py make-labels --config configs/labels.yaml
 
 # 3) build prompt samples
-python3 __main__.py build-samples --config configs/data.yaml
+python __main__.py build-samples --config configs/data.yaml
 
 # 4) build SFT + GRPO datasets
-python3 __main__.py distill-sft --config configs/distill.yaml
+python __main__.py distill-sft --config configs/distill.yaml
 
 # 5) training
-python3 __main__.py train-sft --config configs/train_stage1_sft.yaml
-python3 __main__.py train-grpo --config configs/train_stage1_grpo.yaml
+python __main__.py train-sft --config configs/train_stage1_sft.yaml
+python __main__.py train-grpo --config configs/train_stage1_grpo.yaml
 
-python3 __main__.py train-sft --config configs/train_stage2_sft.yaml
-python3 __main__.py train-grpo --config configs/train_stage2_grpo.yaml
+python __main__.py train-sft --config configs/train_stage2_sft.yaml
+python __main__.py train-grpo --config configs/train_stage2_grpo.yaml
 
-python3 __main__.py train-sft --config configs/train_stage3_sft.yaml
-python3 __main__.py train-grpo --config configs/train_stage3_grpo.yaml
+python __main__.py train-sft --config configs/train_stage3_sft.yaml
+python __main__.py train-grpo --config configs/train_stage3_grpo.yaml
 
 # 6) inference/backtest
-python3 __main__.py infer --config configs/infer.yaml --date 2024-07-15 --ticker AAPL
-python3 __main__.py backtest --config configs/backtest.yaml
+python __main__.py infer --config configs/infer.yaml --date 2024-07-15 --ticker AAPL
+python __main__.py backtest --config configs/backtest.yaml
 ```
-

@@ -4,10 +4,16 @@ distill:
   grpo_output_path: "trading_r1/artifacts/datasets/grpo_batch.jsonl"
 
   frontend:
-    provider: "mock"   # mock | openai
-    model: "gpt-4.1-mini"
+    provider: "hf"   # mock | openai | hf
+    model: "Qwen/Qwen3-4B-Instruct-2507"
     api_key: null
     temperature: 0.2
+    hf_device_map: "auto"
+    hf_load_in_4bit: true
+    hf_max_new_tokens: 16
+    hf_top_p: 0.9
+    hf_do_sample: false
+    hf_trust_remote_code: true
 
   planner:
     max_steps: 6

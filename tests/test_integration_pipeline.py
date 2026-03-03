@@ -160,7 +160,7 @@ def test_end_to_end_pipeline_and_training_smoke(tmp_path: Path) -> None:
             lora_r=64,
             lora_alpha=128,
             lora_dropout=0.05,
-            lora_target_modules=["q", "k", "v", "o", "up", "down", "gate"],
+            lora_target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
         )
     )
     losses = sft_metrics["train_loss"]

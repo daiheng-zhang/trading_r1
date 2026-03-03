@@ -180,7 +180,12 @@ def train_sft_from_config(config: dict[str, Any]) -> dict[str, Any]:
         lora_r=int(c.get("lora_r", 64)),
         lora_alpha=int(c.get("lora_alpha", 128)),
         lora_dropout=float(c.get("lora_dropout", 0.05)),
-        lora_target_modules=list(c.get("lora_target_modules", ["q", "k", "v", "o", "up", "down", "gate"])),
+        lora_target_modules=list(
+            c.get(
+                "lora_target_modules",
+                ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
+            )
+        ),
         deepspeed_config=c.get("deepspeed_config"),
     )
     return train_sft(cfg)
