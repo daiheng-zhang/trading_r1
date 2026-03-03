@@ -8,6 +8,9 @@ train_sft:
   model_name: "Qwen/Qwen3-4B-Instruct"
   max_seq_len: 32768
   num_train_epochs: 1
+  # Set to "latest" to continue from newest checkpoint in output_dir,
+  # or an explicit path like ".../checkpoint-100".
+  resume_from_checkpoint: null
   learning_rate: 2.0e-5
   batch_size: 1
   grad_accum: 8

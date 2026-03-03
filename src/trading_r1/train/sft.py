@@ -28,6 +28,37 @@ class SFTConfig:
     lora_dropout: float
     lora_target_modules: list[str]
     deepspeed_config: str | None = None
+    resume_from_checkpoint: str | None = None
+
+
+def _resolve_resume_checkpoint(cfg: SFTConfig) -> str | None:
+    value = cfg.resume_from_checkpoint
+    if not value:
+        return None
+
+    lowered = str(value).strip().lower()
+    if lowered in {"", "none", "false", "no"}:
+        return None
+
+    if lowered == "latest":
+        try:
+            from transformers.trainer_utils import get_last_checkpoint  # type: ignore
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(
+                "resume_from_checkpoint=latest requires transformers to be installed."
+            ) from exc
+
+        ckpt = get_last_checkpoint(cfg.output_dir)
+        if not ckpt:
+            raise RuntimeError(
+                f"resume_from_checkpoint=latest but no checkpoint found in output_dir: {cfg.output_dir}"
+            )
+        return ckpt
+
+    ckpt_path = Path(value)
+    if not ckpt_path.exists():
+        raise RuntimeError(f"resume checkpoint path does not exist: {ckpt_path}")
+    return str(ckpt_path)
 
 
 def _run_mock_sft(cfg: SFTConfig) -> dict[str, Any]:
@@ -141,7 +172,8 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         tokenizer=tokenizer,
         data_collator=collator,
     )
-    out = trainer.train()
+    resume_ckpt = _resolve_resume_checkpoint(cfg)
+    out = trainer.train(resume_from_checkpoint=resume_ckpt)
     trainer.save_model(cfg.output_dir)
 
     metrics = {
@@ -149,6 +181,7 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         "stage": cfg.stage,
         "samples": len(train_rows),
         "train_loss": float(out.training_loss),
+        "resumed_from_checkpoint": resume_ckpt,
     }
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
     Path(cfg.output_dir, "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
@@ -187,5 +220,6 @@ def train_sft_from_config(config: dict[str, Any]) -> dict[str, Any]:
             )
         ),
         deepspeed_config=c.get("deepspeed_config"),
+        resume_from_checkpoint=c.get("resume_from_checkpoint"),
     )
     return train_sft(cfg)
