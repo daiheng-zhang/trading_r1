@@ -53,3 +53,6 @@ htmlcov/
 *.env
 celerybeat-schedule
 .webassets-cache
+
+
+trading_r1/artifacts/ 
