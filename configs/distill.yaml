@@ -9,7 +9,7 @@ distill:
     api_key: null
     temperature: 0.2
     hf_device_map: "auto"
-    hf_load_in_4bit: true
+    hf_load_in_4bit: false
     hf_max_new_tokens: 16
     hf_top_p: 0.9
     hf_do_sample: false

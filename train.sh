@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH -J trading_r1-sft
+#SBATCH -o log/sft_%j.log
+#SBATCH -e log/sft_%j.log
+#SBATCH -A Deep-Learning-at-Sca
+#SBATCH -p h100
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH --cpus-per-task=64
+#SBATCH -t 18:00:00
+#SBATCH --exclude=c561-007,c563-001,c561-001
+
+cd /home1/10499/daiheng367/trading_r1
+source /scratch/10499/daiheng367/miniconda3/etc/profile.d/conda.sh
+conda activate /scratch/10499/daiheng367/miniconda3/envs/trading_r1
+
+PROJECT_DIR=/home1/10499/daiheng367/trading_r1
+export PYTHONPATH="$PROJECT_DIR:${PYTHONPATH}"
+
+
+python __main__.py train-sft --config configs/train_stage1_sft.yaml
