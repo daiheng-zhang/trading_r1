@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ class SFTConfig:
     logging_steps: int = 5
     report_to: list[str] = field(default_factory=list)
     run_name: str | None = None
+    wandb_project: str = "trading_r1"
     deepspeed_config: str | None = None
 
 
@@ -94,6 +96,7 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
                 "report_to includes 'wandb' but wandb is not installed. "
                 "Install with `python -m pip install wandb`."
             ) from exc
+        os.environ.setdefault("WANDB_PROJECT", cfg.wandb_project)
 
     train_rows = read_jsonl(cfg.train_path)
     if not train_rows:
@@ -210,6 +213,7 @@ def train_sft_from_config(config: dict[str, Any]) -> dict[str, Any]:
         logging_steps=int(c.get("logging_steps", 5)),
         report_to=[str(x) for x in c.get("report_to", [])],
         run_name=str(c["run_name"]) if c.get("run_name") else None,
+        wandb_project=str(c.get("wandb_project", "trading_r1")),
         deepspeed_config=c.get("deepspeed_config"),
     )
     return train_sft(cfg)
