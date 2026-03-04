@@ -56,3 +56,4 @@ celerybeat-schedule
 
 
 trading_r1/artifacts/ 
+wandb/

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,10 @@ class GRPOConfig:
     clip_eps: float
     kl_beta: float
     invalid_decision_reward: float
+    logging_steps: int = 1
+    report_to: list[str] = field(default_factory=list)
+    run_name: str | None = None
+    wandb_project: str = "trading_r1"
 
 
 def _run_mock_grpo(cfg: GRPOConfig) -> dict[str, Any]:
@@ -79,6 +85,16 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
             "GRPO mode=trl requires `trl` and `datasets`. Install optional train dependencies."
         ) from exc
 
+    if "wandb" in cfg.report_to:
+        try:
+            import wandb  # type: ignore  # noqa: F401
+        except Exception as exc:
+            raise RuntimeError(
+                "report_to includes 'wandb' but wandb is not installed. "
+                "Install with `python -m pip install wandb`."
+            ) from exc
+        os.environ.setdefault("WANDB_PROJECT", cfg.wandb_project)
+
     rows = read_jsonl(cfg.train_path)
     if not rows:
         raise RuntimeError(f"No GRPO rows found at {cfg.train_path}")
@@ -106,21 +122,25 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
             rewards.append(float(scored["reward_total"]))
         return rewards
 
-    trl_cfg = TRLGRPOConfig(
-        output_dir=cfg.output_dir,
-        num_train_epochs=1,
-        learning_rate=1e-6,
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=1,
-        logging_steps=1,
-        save_strategy="epoch",
-        report_to=[],
-        max_prompt_length=32768,
-        max_completion_length=1024,
-        num_generations=cfg.group_size,
-        beta=cfg.kl_beta,
-        epsilon=cfg.clip_eps,
-    )
+    trl_cfg_kwargs: dict[str, Any] = {
+        "output_dir": cfg.output_dir,
+        "num_train_epochs": 1,
+        "learning_rate": 1e-6,
+        "per_device_train_batch_size": 1,
+        "gradient_accumulation_steps": 1,
+        "logging_steps": cfg.logging_steps,
+        "save_strategy": "epoch",
+        "report_to": cfg.report_to,
+        "run_name": cfg.run_name,
+        "max_prompt_length": 32768,
+        "max_completion_length": 1024,
+        "num_generations": cfg.group_size,
+        "beta": cfg.kl_beta,
+        "epsilon": cfg.clip_eps,
+    }
+    trl_cfg_init_params = inspect.signature(TRLGRPOConfig.__init__).parameters
+    filtered_trl_cfg_kwargs = {k: v for k, v in trl_cfg_kwargs.items() if k in trl_cfg_init_params}
+    trl_cfg = TRLGRPOConfig(**filtered_trl_cfg_kwargs)
 
     trainer = GRPOTrainer(
         model=cfg.model_name_or_path,
@@ -164,5 +184,9 @@ def train_grpo_from_config(config: dict[str, Any]) -> dict[str, Any]:
         clip_eps=float(c.get("clip_eps", 0.2)),
         kl_beta=float(c.get("kl_beta", 0.03)),
         invalid_decision_reward=float(c.get("invalid_decision_reward", -1.5)),
+        logging_steps=int(c.get("logging_steps", 1)),
+        report_to=[str(x) for x in c.get("report_to", [])],
+        run_name=str(c["run_name"]) if c.get("run_name") else None,
+        wandb_project=str(c.get("wandb_project", "trading_r1")),
     )
     return train_grpo(cfg)

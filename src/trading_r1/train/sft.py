@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,10 @@ class SFTConfig:
     lora_alpha: int
     lora_dropout: float
     lora_target_modules: list[str]
+    logging_steps: int = 5
+    report_to: list[str] = field(default_factory=list)
+    run_name: str | None = None
+    wandb_project: str = "trading_r1"
     deepspeed_config: str | None = None
     resume_from_checkpoint: str | None = None
 
@@ -113,6 +119,16 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
             "SFT mode=hf requires transformers/datasets/peft/torch dependencies."
         ) from exc
 
+    if "wandb" in cfg.report_to:
+        try:
+            import wandb  # type: ignore  # noqa: F401
+        except Exception as exc:
+            raise RuntimeError(
+                "report_to includes 'wandb' but wandb is not installed. "
+                "Install with `python -m pip install wandb`."
+            ) from exc
+        os.environ.setdefault("WANDB_PROJECT", cfg.wandb_project)
+
     train_rows = read_jsonl(cfg.train_path)
     if not train_rows:
         raise RuntimeError(f"No training rows found: {cfg.train_path}")
@@ -158,20 +174,44 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         per_device_train_batch_size=cfg.batch_size,
         gradient_accumulation_steps=cfg.grad_accum,
         bf16=True,
-        logging_steps=5,
+        logging_strategy="steps",
+        logging_steps=cfg.logging_steps,
         save_strategy="epoch",
-        report_to=[],
+        report_to=cfg.report_to,
+        run_name=cfg.run_name,
         deepspeed=cfg.deepspeed_config,
     )
 
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    trainer = Trainer(
-        model=model,
-        args=args,
-        train_dataset=tokenized,
-        tokenizer=tokenizer,
-        data_collator=collator,
+    rgs = TrainingArguments(
+        output_dir=cfg.output_dir,
+        num_train_epochs=cfg.num_train_epochs,
+        learning_rate=cfg.learning_rate,
+        per_device_train_batch_size=cfg.batch_size,
+        gradient_accumulation_steps=cfg.grad_accum,
+        bf16=True,
+        logging_strategy="steps",
+        logging_steps=cfg.logging_steps,
+        save_strategy="epoch",
+        report_to=cfg.report_to,
+        run_name=cfg.run_name,
+        deepspeed=cfg.deepspeed_config,
     )
+
+    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    trainer_kwargs: dict[str, Any] = {
+        "model": model,
+        "args": args,
+        "train_dataset": tokenized,
+        "data_collator": collator,
+    }
+    trainer_init_params = inspect.signature(Trainer.__init__).parameters
+    if "processing_class" in trainer_init_params:
+        trainer_kwargs["processing_class"] = tokenizer
+    elif "tokenizer" in trainer_init_params:
+        trainer_kwargs["tokenizer"] = tokenizer
+
+    trainer = Trainer(**trainer_kwargs)
     resume_ckpt = _resolve_resume_checkpoint(cfg)
     out = trainer.train(resume_from_checkpoint=resume_ckpt)
     trainer.save_model(cfg.output_dir)
@@ -219,6 +259,10 @@ def train_sft_from_config(config: dict[str, Any]) -> dict[str, Any]:
                 ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"],
             )
         ),
+        logging_steps=int(c.get("logging_steps", 5)),
+        report_to=[str(x) for x in c.get("report_to", [])],
+        run_name=str(c["run_name"]) if c.get("run_name") else None,
+        wandb_project=str(c.get("wandb_project", "trading_r1")),
         deepspeed_config=c.get("deepspeed_config"),
         resume_from_checkpoint=c.get("resume_from_checkpoint"),
     )

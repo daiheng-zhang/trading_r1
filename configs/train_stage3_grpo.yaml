@@ -9,3 +9,6 @@ train_grpo:
   clip_eps: 0.2
   kl_beta: 0.03
   invalid_decision_reward: -1.5
+  logging_steps: 1
+  report_to: ["wandb"]
+  run_name: "trading_r1_stage3_grpo"
