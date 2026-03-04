@@ -7,7 +7,7 @@
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=64
-#SBATCH -t 18:00:00
+#SBATCH -t 48:00:00
 #SBATCH --exclude=c561-007,c563-001,c561-001
 
 cd /home1/10499/daiheng367/trading_r1

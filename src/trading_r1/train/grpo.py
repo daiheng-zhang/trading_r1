@@ -24,10 +24,42 @@ class GRPOConfig:
     clip_eps: float
     kl_beta: float
     invalid_decision_reward: float
+    load_from_checkpoint: str | None = None
     logging_steps: int = 1
     report_to: list[str] = field(default_factory=list)
     run_name: str | None = None
     wandb_project: str = "trading_r1"
+
+
+def _resolve_model_name_or_path(cfg: GRPOConfig) -> str:
+    value = cfg.load_from_checkpoint
+    if not value:
+        return cfg.model_name_or_path
+
+    lowered = str(value).strip().lower()
+    if lowered in {"", "none", "false", "no"}:
+        return cfg.model_name_or_path
+
+    if lowered == "latest":
+        try:
+            from transformers.trainer_utils import get_last_checkpoint  # type: ignore
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(
+                "load_from_checkpoint=latest requires transformers to be installed."
+            ) from exc
+
+        ckpt = get_last_checkpoint(cfg.model_name_or_path)
+        if not ckpt:
+            raise RuntimeError(
+                "load_from_checkpoint=latest but no checkpoint found under model_name_or_path: "
+                f"{cfg.model_name_or_path}"
+            )
+        return ckpt
+
+    ckpt_path = Path(value)
+    if not ckpt_path.exists():
+        raise RuntimeError(f"checkpoint path does not exist: {ckpt_path}")
+    return str(ckpt_path)
 
 
 def _run_mock_grpo(cfg: GRPOConfig) -> dict[str, Any]:
@@ -141,9 +173,10 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
     trl_cfg_init_params = inspect.signature(TRLGRPOConfig.__init__).parameters
     filtered_trl_cfg_kwargs = {k: v for k, v in trl_cfg_kwargs.items() if k in trl_cfg_init_params}
     trl_cfg = TRLGRPOConfig(**filtered_trl_cfg_kwargs)
+    model_name_or_path = _resolve_model_name_or_path(cfg)
 
     trainer = GRPOTrainer(
-        model=cfg.model_name_or_path,
+        model=model_name_or_path,
         reward_funcs=reward_func,
         args=trl_cfg,
         train_dataset=dataset,
@@ -158,6 +191,7 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "group_size": cfg.group_size,
         "clip_eps": cfg.clip_eps,
         "kl_beta": cfg.kl_beta,
+        "loaded_model_name_or_path": model_name_or_path,
     }
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
     Path(cfg.output_dir, "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
@@ -180,6 +214,7 @@ def train_grpo_from_config(config: dict[str, Any]) -> dict[str, Any]:
         train_path=c["train_path"],
         output_dir=c["output_dir"],
         model_name_or_path=c.get("model_name_or_path", "Qwen/Qwen3-4B-Instruct"),
+        load_from_checkpoint=c.get("load_from_checkpoint"),
         group_size=int(c.get("group_size", 8)),
         clip_eps=float(c.get("clip_eps", 0.2)),
         kl_beta=float(c.get("kl_beta", 0.03)),

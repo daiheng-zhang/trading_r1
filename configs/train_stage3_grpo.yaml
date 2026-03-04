@@ -4,6 +4,7 @@ train_grpo:
   train_path: "scratch/10499/daiheng367/trading_r1/artifacts/datasets/grpo_batch.jsonl"
   output_dir: "scratch/10499/daiheng367/trading_r1/artifacts/models/stage3_grpo"
   model_name_or_path: "scratch/10499/daiheng367/trading_r1/artifacts/models/stage3_sft"
+  load_from_checkpoint: latest
 
   group_size: 8
   clip_eps: 0.2
