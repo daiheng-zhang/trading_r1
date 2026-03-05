@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -J trading_r1-sft
-#SBATCH -o log/sft_%j.log
-#SBATCH -e log/sft_%j.log
+#SBATCH -J trading_r1-grpo
+#SBATCH -o log/grpo_%j.log
+#SBATCH -e log/grpo_%j.log
 #SBATCH -A Deep-Learning-at-Sca
 #SBATCH -p h100
 #SBATCH -N 1
@@ -19,4 +19,4 @@ export PYTHONPATH="$PROJECT_DIR:${PYTHONPATH}"
 export WANDB_PROJECT="${WANDB_PROJECT:-trading_r1}"
 
 
-python __main__.py train-sft --config configs/train_stage1_sft.yaml
+python __main__.py train-grpo --config configs/train_stage1_grpo.yaml
