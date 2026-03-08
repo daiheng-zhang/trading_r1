@@ -10,6 +10,7 @@ from trading_r1.actions import ACTIONS
 from trading_r1.distill.reverse_planner import reconstruct_reasoning_steps
 from trading_r1.distill.teacher_frontend import generate_frontend_recommendation
 from trading_r1.schemas import GRPOBatchItem, SFTTarget
+from trading_r1.utils.chat_format import build_chat_prompt
 from trading_r1.utils.io import read_jsonl, write_jsonl
 
 
@@ -108,7 +109,7 @@ def distill_sft_and_grpo(cfg: DistillConfig) -> tuple[list[dict[str, Any]], list
         grpo_items.append(
             GRPOBatchItem(
                 sample_id=str(sample.get("sample_id", "")),
-                prompt=input_text,
+                prompt=build_chat_prompt(input_text),
                 ground_truth_action=label_hint if label_hint in ACTIONS else decision,
                 reward_context={"allowed_tags": DEFAULT_ALLOWED_TAGS},
             ).to_dict()

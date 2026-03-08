@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from trading_r1.train.runtime import resolve_training_runtime
+from trading_r1.utils.chat_format import build_chat_prompt
 from trading_r1.utils.io import read_jsonl
 
 
@@ -137,7 +138,10 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
 
     def _fmt(row: dict[str, Any]) -> dict[str, str]:
         return {
-            "text": f"<|user|>\n{row['input_text']}\n<|assistant|>\n{row['target_text']}"
+            "text": build_chat_prompt(
+                user_text=str(row["input_text"]),
+                assistant_text=str(row["target_text"]),
+            )
         }
 
     train_ds = datasets.Dataset.from_list([_fmt(r) for r in train_rows])

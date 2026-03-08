@@ -12,6 +12,7 @@ from typing import Any
 
 from trading_r1.reward.aggregate import aggregate_reward
 from trading_r1.train.runtime import resolve_training_runtime
+from trading_r1.utils.chat_format import ensure_chat_prompt_has_assistant_turn
 from trading_r1.utils.io import read_jsonl
 
 
@@ -34,6 +35,11 @@ class GRPOConfig:
     generation_batch_size: int | None = None
     steps_per_generation: int | None = None
     logging_steps: int = 1
+    max_prompt_length: int = 32768
+    max_completion_length: int = 1024
+    temperature: float = 1.0
+    log_completions: bool = False
+    num_completions_to_print: int | None = None
     report_to: list[str] = field(default_factory=list)
     run_name: str | None = None
     wandb_project: str = "trading_r1"
@@ -231,7 +237,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
     dataset = datasets.Dataset.from_list(
         [
             {
-                "prompt": str(r.get("prompt", "")),
+                "prompt": ensure_chat_prompt_has_assistant_turn(
+                    str(r.get("prompt", r.get("input_text", "")))
+                ),
                 "ground_truth_action": str(r.get("ground_truth_action", "HOLD")),
             }
             for r in rows
@@ -269,8 +277,11 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "save_strategy": "epoch",
         "report_to": cfg.report_to,
         "run_name": cfg.run_name,
-        "max_prompt_length": 32768,
-        "max_completion_length": 1024,
+        "max_prompt_length": cfg.max_prompt_length,
+        "max_completion_length": cfg.max_completion_length,
+        "temperature": cfg.temperature,
+        "log_completions": cfg.log_completions,
+        "num_completions_to_print": cfg.num_completions_to_print,
         "num_generations": cfg.group_size,
         "model_init_kwargs": {"torch_dtype": runtime.torch_dtype},
         "beta": cfg.kl_beta,
@@ -392,6 +403,15 @@ def train_grpo_from_config(config: dict[str, Any]) -> dict[str, Any]:
             int(c["steps_per_generation"]) if c.get("steps_per_generation") is not None else None
         ),
         logging_steps=int(c.get("logging_steps", 1)),
+        max_prompt_length=int(c.get("max_prompt_length", 32768)),
+        max_completion_length=int(c.get("max_completion_length", 1024)),
+        temperature=float(c.get("temperature", 1.0)),
+        log_completions=bool(c.get("log_completions", False)),
+        num_completions_to_print=(
+            int(c["num_completions_to_print"])
+            if c.get("num_completions_to_print") is not None
+            else None
+        ),
         report_to=[str(x) for x in c.get("report_to", [])],
         run_name=str(c["run_name"]) if c.get("run_name") else None,
         wandb_project=str(c.get("wandb_project", "trading_r1")),
