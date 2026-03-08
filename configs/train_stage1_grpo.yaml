@@ -9,8 +9,11 @@ train_grpo:
   load_from_checkpoint: latest
 
   group_size: 2
-  generation_batch_size: 4
-  max_completion_length: 512
+  generation_batch_size: 8
+  per_device_train_batch_size: 2
+  max_completion_length: 384
+  logging_steps: 10
+
   clip_eps: 0.2
   kl_beta: 0.03
   invalid_decision_reward: -1.5
