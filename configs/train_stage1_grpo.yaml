@@ -8,11 +8,11 @@ train_grpo:
   # or an explicit path like ".../checkpoint-100".
   load_from_checkpoint: latest
 
-  group_size: 8
+  group_size: 2
   clip_eps: 0.2
   kl_beta: 0.03
   invalid_decision_reward: -1.5
-  num_train_epochs: 10
+  num_train_epochs: 1
   logging_steps: 1
   report_to: ["wandb"]
   run_name: "trading_r1_stage1_grpo"

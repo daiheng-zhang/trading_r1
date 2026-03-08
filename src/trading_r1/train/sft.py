@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from trading_r1.train.runtime import resolve_training_runtime
 from trading_r1.utils.io import read_jsonl
 
 
@@ -132,6 +133,7 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
     train_rows = read_jsonl(cfg.train_path)
     if not train_rows:
         raise RuntimeError(f"No training rows found: {cfg.train_path}")
+    runtime = resolve_training_runtime(torch_module=torch)
 
     def _fmt(row: dict[str, Any]) -> dict[str, str]:
         return {
@@ -144,7 +146,7 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(cfg.model_name, torch_dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(cfg.model_name, torch_dtype=runtime.torch_dtype)
 
     lora_cfg = LoraConfig(
         r=cfg.lora_r,
@@ -173,7 +175,9 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         learning_rate=cfg.learning_rate,
         per_device_train_batch_size=cfg.batch_size,
         gradient_accumulation_steps=cfg.grad_accum,
-        bf16=True,
+        bf16=runtime.bf16,
+        fp16=runtime.fp16,
+        use_cpu=runtime.use_cpu,
         logging_strategy="steps",
         logging_steps=cfg.logging_steps,
         save_strategy="epoch",
@@ -183,22 +187,9 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
     )
 
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    rgs = TrainingArguments(
-        output_dir=cfg.output_dir,
-        num_train_epochs=cfg.num_train_epochs,
-        learning_rate=cfg.learning_rate,
-        per_device_train_batch_size=cfg.batch_size,
-        gradient_accumulation_steps=cfg.grad_accum,
-        bf16=True,
-        logging_strategy="steps",
-        logging_steps=cfg.logging_steps,
-        save_strategy="epoch",
-        report_to=cfg.report_to,
-        run_name=cfg.run_name,
-        deepspeed=cfg.deepspeed_config,
-    )
+    if runtime.use_cpu:
+        print("[train-sft] No accelerator detected; using CPU training with float32.")
 
-    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     trainer_kwargs: dict[str, Any] = {
         "model": model,
         "args": args,
@@ -221,6 +212,9 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         "stage": cfg.stage,
         "samples": len(train_rows),
         "train_loss": float(out.training_loss),
+        "device": runtime.device,
+        "precision": runtime.precision,
+        "use_cpu": runtime.use_cpu,
         "resumed_from_checkpoint": resume_ckpt,
     }
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)

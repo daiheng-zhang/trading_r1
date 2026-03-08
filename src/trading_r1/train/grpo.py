@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from trading_r1.reward.aggregate import aggregate_reward
+from trading_r1.train.runtime import resolve_training_runtime
 from trading_r1.utils.io import read_jsonl
 
 
@@ -204,11 +205,13 @@ def _run_mock_grpo(cfg: GRPOConfig) -> dict[str, Any]:
 def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heavy path
     try:
         import datasets  # type: ignore
+        import torch
         from trl import GRPOConfig as TRLGRPOConfig  # type: ignore
         from trl import GRPOTrainer  # type: ignore
     except Exception as exc:
         raise RuntimeError(
-            "GRPO mode=trl requires `trl` and `datasets`. Install optional train dependencies."
+            "GRPO mode=trl requires `trl`, `datasets`, and `torch`. "
+            "Install optional train dependencies."
         ) from exc
 
     if "wandb" in cfg.report_to:
@@ -249,6 +252,7 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         return rewards
 
     world_size = _resolve_world_size()
+    runtime = resolve_training_runtime(torch_module=torch)
     generation_overrides, auto_adjusted_generation_batch_size = _resolve_generation_batching(
         cfg, world_size=world_size
     )
@@ -258,6 +262,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "learning_rate": cfg.learning_rate,
         "per_device_train_batch_size": cfg.per_device_train_batch_size,
         "gradient_accumulation_steps": cfg.gradient_accumulation_steps,
+        "bf16": runtime.bf16,
+        "fp16": runtime.fp16,
+        "use_cpu": runtime.use_cpu,
         "logging_steps": cfg.logging_steps,
         "save_strategy": "epoch",
         "report_to": cfg.report_to,
@@ -265,6 +272,7 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "max_prompt_length": 32768,
         "max_completion_length": 1024,
         "num_generations": cfg.group_size,
+        "model_init_kwargs": {"torch_dtype": runtime.torch_dtype},
         "beta": cfg.kl_beta,
         "epsilon": cfg.clip_eps,
     }
@@ -282,6 +290,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
     trl_cfg = TRLGRPOConfig(**filtered_trl_cfg_kwargs)
     model_name_or_path = _resolve_model_name_or_path(cfg)
 
+    if runtime.use_cpu and os.getenv("LOCAL_RANK", "0") == "0":
+        print("[train-grpo] No accelerator detected; using CPU training with float32.")
+
     if auto_adjusted_generation_batch_size and os.getenv("LOCAL_RANK", "0") == "0":
         print(
             "[train-grpo] Auto-adjusted generation_batch_size to "
@@ -294,7 +305,6 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
     tokenizer_name_or_path: str | None = None
     if loaded_peft_adapter_checkpoint:
         try:
-            import torch
             from peft import AutoPeftModelForCausalLM  # type: ignore
             from transformers import AutoTokenizer  # type: ignore
         except Exception as exc:
@@ -306,7 +316,7 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         trainer_model = AutoPeftModelForCausalLM.from_pretrained(
             model_name_or_path,
             is_trainable=True,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=runtime.torch_dtype,
         )
         processing_class = AutoTokenizer.from_pretrained(tokenizer_name_or_path, use_fast=True)
         if processing_class.pad_token is None:
@@ -338,6 +348,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "generation_batch_size": getattr(trl_cfg, "generation_batch_size", None),
         "steps_per_generation": getattr(trl_cfg, "steps_per_generation", None),
         "world_size": world_size,
+        "device": runtime.device,
+        "precision": runtime.precision,
+        "use_cpu": runtime.use_cpu,
         "auto_adjusted_generation_batch_size": auto_adjusted_generation_batch_size,
         "loaded_peft_adapter_checkpoint": loaded_peft_adapter_checkpoint,
         "tokenizer_name_or_path": tokenizer_name_or_path,
