@@ -14,6 +14,27 @@ train_grpo:
   clip_eps: 0.2
   kl_beta: 0.03
   invalid_decision_reward: -1.5
+  format_instruction: |
+    Return only structured analysis that follows this exact schema.
+    Required paired XML tags, each exactly once:
+    <fundamentals>...</fundamentals>
+    <technical>...</technical>
+    <news>...</news>
+    <valuation>...</valuation>
+    <risk>...</risk>
+    <macro>...</macro>
+    <conclusion>...</conclusion>
+
+    Rules:
+    - Do not write analysis outside the XML blocks.
+    - Every opening tag must have a matching closing tag.
+    - The response must include <conclusion>...</conclusion>.
+    - The final line must be exactly one of:
+      DECISION: [[[HOLD]]]
+      DECISION: [[[BUY]]]
+      DECISION: [[[SELL]]]
+      DECISION: [[[STRONG_BUY]]]
+      DECISION: [[[STRONG_SELL]]]
   num_train_epochs: 1
   logging_steps: 1
   report_to: ["wandb"]

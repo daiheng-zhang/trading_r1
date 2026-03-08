@@ -12,7 +12,7 @@ from typing import Any
 
 from trading_r1.reward.aggregate import aggregate_reward
 from trading_r1.train.runtime import resolve_training_runtime
-from trading_r1.utils.chat_format import ensure_chat_prompt_has_assistant_turn
+from trading_r1.utils.chat_format import append_instruction_to_user_turn
 from trading_r1.utils.io import read_jsonl
 
 
@@ -38,11 +38,16 @@ class GRPOConfig:
     max_prompt_length: int = 32768
     max_completion_length: int = 1024
     temperature: float = 1.0
+    format_instruction: str | None = None
     log_completions: bool = False
     num_completions_to_print: int | None = None
     report_to: list[str] = field(default_factory=list)
     run_name: str | None = None
     wandb_project: str = "trading_r1"
+
+
+def _prepare_grpo_prompt(prompt: str, format_instruction: str | None = None) -> str:
+    return append_instruction_to_user_turn(prompt, format_instruction)
 
 
 def _resolve_world_size() -> int:
@@ -237,8 +242,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
     dataset = datasets.Dataset.from_list(
         [
             {
-                "prompt": ensure_chat_prompt_has_assistant_turn(
-                    str(r.get("prompt", r.get("input_text", "")))
+                "prompt": _prepare_grpo_prompt(
+                    str(r.get("prompt", r.get("input_text", ""))),
+                    cfg.format_instruction,
                 ),
                 "ground_truth_action": str(r.get("ground_truth_action", "HOLD")),
             }
@@ -406,6 +412,9 @@ def train_grpo_from_config(config: dict[str, Any]) -> dict[str, Any]:
         max_prompt_length=int(c.get("max_prompt_length", 32768)),
         max_completion_length=int(c.get("max_completion_length", 1024)),
         temperature=float(c.get("temperature", 1.0)),
+        format_instruction=(
+            str(c["format_instruction"]) if c.get("format_instruction") is not None else None
+        ),
         log_completions=bool(c.get("log_completions", False)),
         num_completions_to_print=(
             int(c["num_completions_to_print"])

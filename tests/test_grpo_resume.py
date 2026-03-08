@@ -7,6 +7,7 @@ import pytest
 
 from trading_r1.train.grpo import (
     GRPOConfig,
+    _prepare_grpo_prompt,
     _is_peft_adapter_checkpoint,
     _resolve_generation_batching,
     _resolve_model_name_or_path,
@@ -84,6 +85,20 @@ def test_generation_batching_rejects_conflicting_overrides(tmp_path: Path) -> No
     cfg.steps_per_generation = 2
     with pytest.raises(ValueError):
         _resolve_generation_batching(cfg, world_size=4)
+
+
+def test_prepare_grpo_prompt_appends_format_instruction() -> None:
+    prompt = "<|user|>\nctx\n<|assistant|>\n"
+    formatted = _prepare_grpo_prompt(
+        prompt,
+        "Use only paired XML tags and end with DECISION: [[[HOLD]]].",
+    )
+    assert formatted == (
+        "<|user|>\n"
+        "ctx\n\n"
+        "Use only paired XML tags and end with DECISION: [[[HOLD]]].\n"
+        "<|assistant|>\n"
+    )
 
 
 def test_detects_peft_adapter_checkpoint_without_config_json(tmp_path: Path) -> None:
