@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from trading_r1.reward.aggregate import aggregate_reward
+from trading_r1.train.checkpointing import build_best_checkpoint_callback
 from trading_r1.train.runtime import resolve_training_runtime
 from trading_r1.utils.chat_format import append_instruction_to_user_turn
 from trading_r1.utils.io import read_jsonl
@@ -35,6 +36,8 @@ class GRPOConfig:
     generation_batch_size: int | None = None
     steps_per_generation: int | None = None
     logging_steps: int = 1
+    save_steps: int = 100
+    save_total_limit: int = 1
     max_prompt_length: int = 32768
     max_completion_length: int = 1024
     temperature: float = 1.0
@@ -280,7 +283,9 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "fp16": runtime.fp16,
         "use_cpu": runtime.use_cpu,
         "logging_steps": cfg.logging_steps,
-        "save_strategy": "epoch",
+        "save_strategy": "steps",
+        "save_steps": cfg.save_steps,
+        "save_total_limit": cfg.save_total_limit,
         "report_to": cfg.report_to,
         "run_name": cfg.run_name,
         "max_prompt_length": cfg.max_prompt_length,
@@ -344,11 +349,20 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "reward_funcs": reward_func,
         "args": trl_cfg,
         "train_dataset": dataset,
+        "callbacks": [
+            build_best_checkpoint_callback(
+                best_checkpoint_dirname="best-reward",
+                metric_names=("reward", "eval_reward"),
+                greater_is_better=True,
+            )
+        ],
     }
     if processing_class is not None:
         trainer_kwargs["processing_class"] = processing_class
 
-    trainer = GRPOTrainer(**trainer_kwargs)
+    trainer_init_params = inspect.signature(GRPOTrainer.__init__).parameters
+    filtered_trainer_kwargs = {k: v for k, v in trainer_kwargs.items() if k in trainer_init_params}
+    trainer = GRPOTrainer(**filtered_trainer_kwargs)
     trainer.train()
     trainer.save_model(cfg.output_dir)
 
@@ -371,6 +385,11 @@ def _run_trl_grpo(cfg: GRPOConfig) -> dict[str, Any]:  # pragma: no cover - heav
         "auto_adjusted_generation_batch_size": auto_adjusted_generation_batch_size,
         "loaded_peft_adapter_checkpoint": loaded_peft_adapter_checkpoint,
         "tokenizer_name_or_path": tokenizer_name_or_path,
+        "best_reward_checkpoint_dir": (
+            str(Path(cfg.output_dir) / "best-reward")
+            if (Path(cfg.output_dir) / "best-reward").is_dir()
+            else None
+        ),
     }
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
     Path(cfg.output_dir, "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
@@ -409,6 +428,8 @@ def train_grpo_from_config(config: dict[str, Any]) -> dict[str, Any]:
             int(c["steps_per_generation"]) if c.get("steps_per_generation") is not None else None
         ),
         logging_steps=int(c.get("logging_steps", 1)),
+        save_steps=int(c.get("save_steps", 100)),
+        save_total_limit=int(c.get("save_total_limit", 1)),
         max_prompt_length=int(c.get("max_prompt_length", 32768)),
         max_completion_length=int(c.get("max_completion_length", 1024)),
         temperature=float(c.get("temperature", 1.0)),
