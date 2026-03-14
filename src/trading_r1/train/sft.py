@@ -107,11 +107,47 @@ def _run_mock_sft(cfg: SFTConfig) -> dict[str, Any]:
     return metrics
 
 
+def _is_peft_adapter_checkpoint(model_name_or_path: str | Path) -> bool:
+    path = Path(model_name_or_path)
+    return (
+        path.is_dir()
+        and (path / "adapter_config.json").is_file()
+        and not (path / "config.json").exists()
+    )
+
+
+def _resolve_peft_base_model_name_or_path(model_name_or_path: str | Path) -> str:
+    adapter_config_path = Path(model_name_or_path) / "adapter_config.json"
+    try:
+        adapter_config = json.loads(adapter_config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to read PEFT adapter config from {adapter_config_path}."
+        ) from exc
+
+    base_model_name_or_path = adapter_config.get("base_model_name_or_path")
+    if not isinstance(base_model_name_or_path, str) or not base_model_name_or_path.strip():
+        raise RuntimeError(
+            "PEFT adapter checkpoint is missing `base_model_name_or_path` in adapter_config.json: "
+            f"{adapter_config_path}"
+        )
+    return base_model_name_or_path
+
+
+def _resolve_tokenizer_name_or_path(model_name_or_path: str | Path) -> str:
+    path = Path(model_name_or_path)
+    if path.is_dir() and (path / "tokenizer_config.json").is_file():
+        return str(path)
+    if _is_peft_adapter_checkpoint(path):
+        return _resolve_peft_base_model_name_or_path(path)
+    return str(path)
+
+
 def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy path
     try:
         import datasets  # type: ignore
         import torch
-        from peft import LoraConfig, get_peft_model  # type: ignore
+        from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model  # type: ignore
         from transformers import (
             AutoModelForCausalLM,
             AutoTokenizer,
@@ -151,21 +187,34 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
     train_ds = datasets.Dataset.from_list([_fmt(r) for r in train_rows])
     eval_ds = datasets.Dataset.from_list([_fmt(r) for r in val_rows]) if val_rows else None
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name, use_fast=True)
+    model_name_or_path = cfg.model_name
+    tokenizer_name_or_path = _resolve_tokenizer_name_or_path(model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(cfg.model_name, torch_dtype=runtime.torch_dtype)
+    loaded_peft_adapter_checkpoint = _is_peft_adapter_checkpoint(model_name_or_path)
+    if loaded_peft_adapter_checkpoint:
+        model = AutoPeftModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            is_trainable=True,
+            torch_dtype=runtime.torch_dtype,
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            torch_dtype=runtime.torch_dtype,
+        )
 
-    lora_cfg = LoraConfig(
-        r=cfg.lora_r,
-        lora_alpha=cfg.lora_alpha,
-        lora_dropout=cfg.lora_dropout,
-        target_modules=cfg.lora_target_modules,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-    model = get_peft_model(model, lora_cfg)
+        lora_cfg = LoraConfig(
+            r=cfg.lora_r,
+            lora_alpha=cfg.lora_alpha,
+            lora_dropout=cfg.lora_dropout,
+            target_modules=cfg.lora_target_modules,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
     model.gradient_checkpointing_enable()
 
     def _tokenize(batch: dict[str, list[str]]) -> dict[str, Any]:
@@ -254,6 +303,9 @@ def _run_hf_sft(cfg: SFTConfig) -> dict[str, Any]:  # pragma: no cover - heavy p
         "device": runtime.device,
         "precision": runtime.precision,
         "use_cpu": runtime.use_cpu,
+        "loaded_model_name_or_path": model_name_or_path,
+        "tokenizer_name_or_path": tokenizer_name_or_path,
+        "loaded_peft_adapter_checkpoint": loaded_peft_adapter_checkpoint,
         "resumed_from_checkpoint": resume_ckpt,
         "best_model_checkpoint": getattr(trainer.state, "best_model_checkpoint", None),
         "best_loss_checkpoint_dir": (

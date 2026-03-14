@@ -13,6 +13,8 @@ train_grpo:
   per_device_train_batch_size: 2
   max_completion_length: 384
   logging_steps: 10
+  # Mirror the highest-reward checkpoint into output_dir/best-reward for Stage II SFT warm-start.
+  save_steps: 1
 
   clip_eps: 0.2
   kl_beta: 0.03

@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from trading_r1.train.sft import SFTConfig, _resolve_resume_checkpoint
+from trading_r1.train.sft import (
+    SFTConfig,
+    _is_peft_adapter_checkpoint,
+    _resolve_peft_base_model_name_or_path,
+    _resolve_resume_checkpoint,
+    _resolve_tokenizer_name_or_path,
+)
 
 
 def _base_cfg(tmp_path: Path) -> SFTConfig:
@@ -46,3 +52,33 @@ def test_resolve_resume_missing_path_raises(tmp_path: Path) -> None:
     cfg.resume_from_checkpoint = str(tmp_path / "checkpoint-missing")
     with pytest.raises(RuntimeError):
         _resolve_resume_checkpoint(cfg)
+
+
+def test_detects_peft_adapter_checkpoint_without_config_json(tmp_path: Path) -> None:
+    ckpt = tmp_path / "stage1_grpo"
+    ckpt.mkdir(parents=True)
+    (ckpt / "adapter_config.json").write_text(
+        '{"base_model_name_or_path": "Qwen/Qwen3-4B-Instruct-2507"}',
+        encoding="utf-8",
+    )
+    assert _is_peft_adapter_checkpoint(ckpt) is True
+
+
+def test_resolve_peft_base_model_name_or_path(tmp_path: Path) -> None:
+    ckpt = tmp_path / "stage1_grpo"
+    ckpt.mkdir(parents=True)
+    (ckpt / "adapter_config.json").write_text(
+        '{"base_model_name_or_path": "Qwen/Qwen3-4B-Instruct-2507"}',
+        encoding="utf-8",
+    )
+    assert _resolve_peft_base_model_name_or_path(ckpt) == "Qwen/Qwen3-4B-Instruct-2507"
+
+
+def test_resolve_tokenizer_name_or_path_falls_back_to_peft_base_model(tmp_path: Path) -> None:
+    ckpt = tmp_path / "stage1_grpo"
+    ckpt.mkdir(parents=True)
+    (ckpt / "adapter_config.json").write_text(
+        '{"base_model_name_or_path": "Qwen/Qwen3-4B-Instruct-2507"}',
+        encoding="utf-8",
+    )
+    assert _resolve_tokenizer_name_or_path(ckpt) == "Qwen/Qwen3-4B-Instruct-2507"

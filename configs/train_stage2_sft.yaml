@@ -5,9 +5,10 @@ train_sft:
   val_path: null
   output_dir: "/scratch/10499/daiheng367/trading_r1/artifacts/models/stage2_sft"
 
-  model_name: "Qwen/Qwen3-4B-Instruct-2507"
+  # Warm-start Stage II SFT from the best-reward checkpoint selected during Stage I GRPO.
+  model_name: "/scratch/10499/daiheng367/trading_r1/artifacts/models/stage1_grpo/best-reward"
   max_seq_len: 32768
-  num_train_epochs: 1
+  num_train_epochs: 3
   learning_rate: 1.5e-5
   batch_size: 1
   grad_accum: 8

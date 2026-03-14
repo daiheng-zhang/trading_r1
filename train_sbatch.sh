@@ -19,4 +19,4 @@ export PYTHONPATH="$PROJECT_DIR:${PYTHONPATH}"
 export WANDB_PROJECT="${WANDB_PROJECT:-trading_r1}"
 
 
-torchrun --nproc_per_node=4 __main__.py train-grpo --config configs/train_stage1_grpo.yaml
+torchrun --nproc_per_node=4 __main__.py train-sft --config configs/train_stage2_sft.yaml
